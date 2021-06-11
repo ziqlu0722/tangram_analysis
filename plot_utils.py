@@ -1,18 +1,13 @@
 import logging
-from scipy.stats import sem
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import pickle
 import os
 import seaborn as sns
-from sklearn.metrics import auc
 import tangram as tg
 import scanpy as sc
 import ast
-
 from matplotlib.cm import get_cmap
-
 import matplotlib.ticker as ticker
 
 
