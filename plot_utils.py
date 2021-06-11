@@ -1,13 +1,18 @@
 import logging
+from scipy.stats import sem
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pickle
 import os
 import seaborn as sns
+from sklearn.metrics import auc
 import tangram as tg
 import scanpy as sc
 import ast
+
 from matplotlib.cm import get_cmap
+
 import matplotlib.ticker as ticker
 
 
@@ -252,25 +257,22 @@ def plot_scatter_auc_tbl(df_dict, size=(14, 8), scale=(1, 2)):
         ax.set_title("experiment_{}\n# evaluated genes: {}".format(exp_idx, num_genes))
 
         # tbl data
-        data_tbl.append(
-            [
-                float(metric_dict[k])
-                for k in ["avg_test_score", "sp_sparsity_score", "auc_score"]
-            ]
-        )
+        data_tbl.append([float(metric_dict[k]) for k in METRIC_LIST])
         colheaders_tbl.append("exp {}".format(exp_idx))
 
     # tbl
     ax_tbl = fig.add_subplot(grid[1, :])
     data_tbl = np.array(np.round(data_tbl, 3)).T
-    rowheaders_tbl = ["avg score", "sp sparsity score", "auc score"]
+    rowheaders_tbl = METRIC_LIST
     cell_ann_tbl(data_tbl, ax_tbl, colheaders_tbl, rowheaders_tbl, scale)
 
 
-def paired_metric_hist_plot(df_test, df_val, bins=20):
-    fig, axs = plt.subplots(2, 3, figsize=(12, 6), sharex="col", sharey="row")
+def paired_metric_hist_plot(df_test, df_val, bins=20, rows=2, cols=3):
+    fig, axs = plt.subplots(
+        rows, cols, figsize=(cols * 4, 6), sharex="col", sharey="row"
+    )
 
-    metrics = ["avg_test_score", "sp_sparsity_score", "auc_score"]
+    metrics = METRIC_LIST
 
     for ix, metric in enumerate(metrics):
         axs[0, ix].hist(df_test[metric], bins=bins, color="C0", label="test")
@@ -296,9 +298,7 @@ def scatter_all_metrics(df, x="auc_score", y="sp_sparsity_score", c="avg_test_sc
 def trend_all_metrics(df, by="avg_test_score"):
 
     df = df.sort_values(by=by).reset_index()
-    df[["avg_test_score", "sp_sparsity_score", "auc_score"]].plot.line(
-        figsize=(15, 3), subplots=False
-    )
+    df[METRIC_LIST].plot.line(figsize=(15, 3), subplots=False)
 
     plt.legend(bbox_to_anchor=(1.1, 1), loc="upper left", ncol=1)
     plt.gca().yaxis.set_label_position("right")
@@ -306,11 +306,11 @@ def trend_all_metrics(df, by="avg_test_score"):
     plt.box(on=None)
 
 
-def heatmap_all_metrics(df):
-    idx_list = get_idx_list(df)
+def heatmap_all_metrics(df, metric):
+    idx_list = get_idx_list(df, metric)
     plt.figure(figsize=(10, 6))
-    df = df[["auc_score", "sp_sparsity_score", "avg_test_score"]]
-    df = df.sort_values(by="avg_test_score")
+    df = df[METRIC_LIST]
+    df = df.sort_values(by=metric)
 
     df_norm = (df - df.min()) / (df.max() - df.min())
     ax = sns.heatmap(df_norm.T, cmap="PiYG")
@@ -320,8 +320,8 @@ def heatmap_all_metrics(df):
     plt.yticks(rotation=0)
 
 
-def get_idx_list(df):
-    df = df.sort_values(by="avg_test_score")
+def get_idx_list(df, metric):
+    df = df.sort_values(by=metric)
     ranked_idx_list = list(df["exp_idx"])
     top_idx = ranked_idx_list[-1]
     bottom_idx = ranked_idx_list[0]
@@ -339,7 +339,7 @@ def overlay_auc(df_dict, df_markers=None, ann=None, top_n=500, cname="Set1"):
     cmap = get_cmap(cname)
     color = iter(cmap.colors)
 
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(4.5, 4.5))
     #     plt.gca().set_aspect(1)
 
     for idx, df in df_dict.items():
@@ -363,7 +363,7 @@ def overlay_auc(df_dict, df_markers=None, ann=None, top_n=500, cname="Set1"):
             label="exp {}: score {:.3f} #genes: {}".format(idx, score, num_genes),
         )
 
-    plt.title("AUC curves - {} genes".format(ann))
+    plt.title("AUC curves - {}".format(ann or "All"))
     plt.legend(loc="lower left")
     plt.xlabel("score")
     plt.ylabel("spatial sparsity")
@@ -391,10 +391,10 @@ def cell_ann_deepdive(
     )
 
     data_tbl = []
-    for k in ["avg_test_score", "sp_sparsity_score", "auc_score"]:
+    for k in METRIC_LIST:
         data_tbl.append([metric_dict[k]])
     data_tbl = np.array(np.round(data_tbl, 3))
-    rowheaders_tbl = ["avg score", "sp sparsity score", "auc score"]
+    rowheaders_tbl = METIRC_LIST
     colheaders_tbl = ["Scores ({} cells)".format(len(genes))]
     cell_ann_tbl(
         data_tbl,
@@ -403,7 +403,7 @@ def cell_ann_deepdive(
         row_headers=rowheaders_tbl,
         scale=(0.6, 1.7),
     )
-    auc_scatter_plot(xs, ys, ax=axs_f[1], c="C0", scatter=True)
+    auc_scatter_plot(xs, ys, ax=axs_f[1], c="grey", scatter=True)
     single_cell_ann_plot(adata_map, annotation, ann, ax=axs_f[2])
 
     axs_f[1].set_title("AUC curve ({} cells)".format(len(genes)))
